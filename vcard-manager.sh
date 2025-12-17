@@ -889,9 +889,15 @@ function edit_contact() {
     # 选择联系人
     while true; do
         # 分页显示联系人
-        local total_contacts=${#contacts[@]}
-        local total_pages=$(( (total_contacts + current_page_size - 1) / current_page_size ))
-        local current_page=1
+        local original_contacts=(${contacts[@]})
+        local filtered_contacts=(${original_contacts[@]})
+        local search_query=""
+        local total_contacts
+        local total_pages
+        local current_page
+        total_contacts=${#filtered_contacts[@]}
+        total_pages=$(( (total_contacts + current_page_size - 1) / current_page_size ))
+        current_page=1
         
         while true; do
             clear
@@ -901,9 +907,14 @@ function edit_contact() {
             echo -e "${BLUE}=====================================${NC}"
             
             # 顶部快捷操作栏
-            echo -e "${YELLOW}【快捷操作】: m.返回主菜单 | q.退出程序 | c.取消 | s.自定义每页显示数量 (当前: $current_page_size)${NC}"
-            echo -e "${BLUE}-------------------------------------${NC}"
+            echo -e "${YELLOW}【快捷操作】: m.返回主菜单 | q.退出程序 | c.取消 | f.搜索 | s.自定义每页显示数量 (当前: $current_page_size)${NC}"
             
+            # 显示搜索状态
+            if [ -n "$search_query" ]; then
+                echo -e "${YELLOW}【搜索中】: '$search_query' (按 f 清空搜索)${NC}"
+            fi
+            
+            echo -e "${BLUE}-------------------------------------${NC}"
             echo -e "${YELLOW}请选择联系人:${NC}"
             echo -e "${YELLOW}第 $current_page/$total_pages 页，共 $total_contacts 个联系人${NC}"
             echo -e "${BLUE}-------------------------------------${NC}"

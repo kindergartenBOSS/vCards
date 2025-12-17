@@ -130,6 +130,87 @@ function save_yaml() {
     fi
 }
 
+# 通用分页选择函数 - 用于创建、编辑、删除功能
+function select_item_paginated() {
+    local items=($1)
+    local prompt="$2"
+    local title="$3"
+    local show_cancel="$4"
+    
+    local total_items=${#items[@]}
+    local total_pages=$(( (total_items + current_page_size - 1) / current_page_size ))
+    local current_page=1
+    
+    while true; do
+        clear
+        echo -e "${BLUE}=====================================${NC}"
+        echo -e "${BLUE}            $title${NC}"
+        echo -e "${BLUE}=====================================${NC}"
+        
+        # 顶部快捷操作栏
+        if [ "$show_cancel" = true ]; then
+            echo -e "${YELLOW}【快捷操作】: m.返回主菜单 | q.退出程序 | c.取消${NC}"
+        else
+            echo -e "${YELLOW}【快捷操作】: m.返回主菜单 | q.退出程序${NC}"
+        fi
+        echo -e "${BLUE}-------------------------------------${NC}"
+        
+        echo -e "${YELLOW}$prompt${NC}"
+        echo -e "${YELLOW}第 $current_page/$total_pages 页，共 $total_items 项${NC}"
+        echo -e "${BLUE}-------------------------------------${NC}"
+        
+        # 计算当前页的起始和结束索引
+        local start_idx=$(( (current_page - 1) * current_page_size ))
+        local end_idx=$(( start_idx + current_page_size - 1 ))
+        if [ $end_idx -ge $total_items ]; then
+            end_idx=$((total_items - 1))
+        fi
+        
+        # 显示当前页的项目
+        for ((i=start_idx; i<=end_idx; i++)); do
+            echo -e "${YELLOW}$((i+1)). ${items[$i]}${NC}"
+        done
+        
+        # 显示分页导航
+        echo -e "${BLUE}-------------------------------------${NC}"
+        echo -e "${YELLOW}分页导航: p.上一页 | n.下一页${NC}"
+        
+        # 读取用户选择
+        read -p "请输入选择: " choice
+        
+        # 处理字母快捷操作
+        case "$choice" in
+            [mM]) show_main_menu; return 1 ;;
+            [qQ]) echo -e "${GREEN}谢谢使用！${NC}"; exit 0 ;;
+            [cC]) if [ "$show_cancel" = true ]; then return 2 ; fi ;;
+            [nN]) if [ $current_page -lt $total_pages ]; then
+                      current_page=$((current_page + 1))
+                  else
+                      echo -e "${YELLOW}已经是最后一页${NC}"
+                      sleep 1
+                  fi
+                  continue ;;
+            [pP]) if [ $current_page -gt 1 ]; then
+                      current_page=$((current_page - 1))
+                  else
+                      echo -e "${YELLOW}已经是第一页${NC}"
+                      sleep 1
+                  fi
+                  continue ;;
+        esac
+        
+        # 处理数字选择
+        if [ "$choice" -ge 1 ] && [ "$choice" -le $total_items ]; then
+            echo "${items[$((choice-1))]}"
+            return 0
+        else
+            echo -e "${RED}无效选择，请重新输入${NC}"
+            sleep 1
+            continue
+        fi
+    done
+}
+
 # 删除 YAML 文件（包括关联的 PNG）
 function delete_yaml() {
     local category="$1"
@@ -239,7 +320,7 @@ function view_contacts() {
                 
                 # 显示分页导航
                 echo -e "${BLUE}-------------------------------------${NC}"
-                echo -e "${YELLOW}分页导航: n.下一页 | p.上一页 | 页码直接跳转 | m.返回主菜单 | q.退出程序 | s.自定义每页显示数量${NC}"
+                echo -e "${YELLOW}分页导航: p.上一页 | n.下一页${NC}"
                 
                 # 读取用户选择
                 read -p "请输入选择: " choice
@@ -281,9 +362,6 @@ function view_contacts() {
                     selected_category=${categories[$((choice-1))]}
                     show_categories=false
                     break
-                elif [ "$choice" -ge 1 ] && [ "$choice" -le $total_pages ]; then
-                    current_page=$choice
-                    continue
                 else
                     echo -e "${RED}无效选择，请重新输入${NC}"
                     sleep 1
@@ -333,7 +411,7 @@ function view_contacts() {
                 
                 # 显示分页导航
                 echo -e "${BLUE}-------------------------------------${NC}"
-                echo -e "${YELLOW}分页导航: n.下一页 | p.上一页 | 页码直接跳转 | b.返回分类列表 | m.返回主菜单 | q.退出程序 | s.自定义每页显示数量${NC}"
+                echo -e "${YELLOW}分页导航: p.上一页 | n.下一页${NC}"
                 
                 # 读取用户选择
                 read -p "请输入选择: " choice
@@ -396,9 +474,6 @@ function view_contacts() {
                     
                     read -p "按 Enter 键返回..." -n 1
                     continue
-                elif [ "$choice" -ge 1 ] && [ "$choice" -le $total_pages ]; then
-                    current_page=$choice
-                    continue
                 else
                     echo -e "${RED}无效选择，请重新输入${NC}"
                     sleep 1
@@ -430,32 +505,74 @@ function create_contact() {
     fi
     
     # 选择分类
-    echo -e "${YELLOW}请选择分类:${NC}"
-    
-    # 显示分类编号和名称
-    for i in "${!categories[@]}"; do
-        echo -e "${YELLOW}$((i+1)). ${categories[$i]}${NC}"
+    while true; do
+        # 分页显示分类
+        local total_categories=${#categories[@]}
+        local total_pages=$(( (total_categories + current_page_size - 1) / current_page_size ))
+        local current_page=1
+        
+        while true; do
+            clear
+            echo -e "${BLUE}=====================================${NC}"
+            echo -e "${BLUE}            创建联系人${NC}"
+            echo -e "${BLUE}=====================================${NC}"
+            
+            # 顶部快捷操作栏
+            echo -e "${YELLOW}【快捷操作】: m.返回主菜单 | q.退出程序 | c.取消 | s.自定义每页显示数量 (当前: $current_page_size)${NC}"
+            echo -e "${BLUE}-------------------------------------${NC}"
+            
+            echo -e "${YELLOW}请选择分类:${NC}"
+            echo -e "${YELLOW}第 $current_page/$total_pages 页，共 $total_categories 个分类${NC}"
+            echo -e "${BLUE}-------------------------------------${NC}"
+            
+            # 计算当前页的起始和结束索引
+            local start_idx=$(( (current_page - 1) * current_page_size ))
+            local end_idx=$(( start_idx + current_page_size - 1 ))
+            if [ $end_idx -ge $total_categories ]; then
+                end_idx=$((total_categories - 1))
+            fi
+            
+            # 显示当前页的分类
+            for ((i=start_idx; i<=end_idx; i++)); do
+                echo -e "${YELLOW}$((i+1)). ${categories[$i]}${NC}"
+            done
+            
+            # 显示分页导航
+            echo -e "${BLUE}-------------------------------------${NC}"
+            echo -e "${YELLOW}分页导航: p.上一页 | n.下一页${NC}"
+            
+            # 读取用户选择
+            read -p "请输入选择: " category_choice
+            
+            # 处理字母快捷操作
+            case "$category_choice" in
+                [mM]) show_main_menu; return ;;
+                [qQ]) echo -e "${GREEN}谢谢使用！${NC}"; exit 0 ;;
+                [cC]) echo -e "${GREEN}已取消创建联系人${NC}"; sleep 1; show_main_menu; return ;;
+                [sS]) read -p "请输入每页显示数量: " new_size
+                      if [ "$new_size" -gt 0 ] 2>/dev/null; then
+                          current_page_size=$new_size
+                          # 重新计算分页信息
+                          total_pages=$(( (total_categories + current_page_size - 1) / current_page_size ))
+                          current_page=1
+                      else
+                          echo -e "${RED}无效的数量，请输入大于0的数字${NC}"
+                          sleep 1
+                      fi
+                      continue ;;
+                [nN]) if [ $current_page -lt $total_pages ]; then current_page=$((current_page + 1)); else echo -e "${YELLOW}已经是最后一页${NC}"; sleep 1; fi; continue ;;
+                [pP]) if [ $current_page -gt 1 ]; then current_page=$((current_page - 1)); else echo -e "${YELLOW}已经是第一页${NC}"; sleep 1; fi; continue ;;
+            esac
+            
+            # 处理数字选择
+            if [ "$category_choice" -ge 1 ] && [ "$category_choice" -le $total_categories ]; then
+                category=${categories[$((category_choice-1))]}
+                break 2
+            else
+                echo -e "${RED}无效选择，请重新输入${NC}"; sleep 1; continue
+            fi
+        done
     done
-    
-    read -p "请输入选择 [1-${#categories[@]}], c.取消: " category_choice
-    
-    # 检查是否取消
-    if [ "$category_choice" = "c" ] || [ "$category_choice" = "C" ]; then
-        echo -e "${GREEN}已取消创建联系人${NC}"
-        sleep 1
-        show_main_menu
-        return
-    fi
-    
-    # 验证分类选择
-    if [ "$category_choice" -ge 1 ] && [ "$category_choice" -le ${#categories[@]} ]; then
-        category=${categories[$((category_choice-1))]}
-    else
-        echo -e "${RED}无效选择，请重新输入${NC}"
-        sleep 1
-        create_contact
-        return
-    fi
     
     # 输入联系人信息
     read -p "请输入组织名称 (c.取消): " organization
@@ -534,34 +651,75 @@ function edit_contact() {
         return
     fi
     
-    # 显示分类菜单
-    echo -e "${YELLOW}请选择分类:${NC}"
-    
-    # 显示分类编号和名称
-    for i in "${!categories[@]}"; do
-        echo -e "${YELLOW}$((i+1)). ${categories[$i]}${NC}"
+    # 选择分类
+    while true; do
+        # 分页显示分类
+        local total_categories=${#categories[@]}
+        local total_pages=$(( (total_categories + current_page_size - 1) / current_page_size ))
+        local current_page=1
+        
+        while true; do
+            clear
+            echo -e "${BLUE}=====================================${NC}"
+            echo -e "${BLUE}            编辑联系人${NC}"
+            echo -e "${BLUE}=====================================${NC}"
+            
+            # 顶部快捷操作栏
+            echo -e "${YELLOW}【快捷操作】: m.返回主菜单 | q.退出程序 | c.取消 | s.自定义每页显示数量 (当前: $current_page_size)${NC}"
+            echo -e "${BLUE}-------------------------------------${NC}"
+            
+            echo -e "${YELLOW}请选择分类:${NC}"
+            echo -e "${YELLOW}第 $current_page/$total_pages 页，共 $total_categories 个分类${NC}"
+            echo -e "${BLUE}-------------------------------------${NC}"
+            
+            # 计算当前页的起始和结束索引
+            local start_idx=$(( (current_page - 1) * current_page_size ))
+            local end_idx=$(( start_idx + current_page_size - 1 ))
+            if [ $end_idx -ge $total_categories ]; then
+                end_idx=$((total_categories - 1))
+            fi
+            
+            # 显示当前页的分类
+            for ((i=start_idx; i<=end_idx; i++)); do
+                echo -e "${YELLOW}$((i+1)). ${categories[$i]}${NC}"
+            done
+            
+            # 显示分页导航
+            echo -e "${BLUE}-------------------------------------${NC}"
+            echo -e "${YELLOW}分页导航: p.上一页 | n.下一页${NC}"
+            
+            # 读取用户选择
+            read -p "请输入选择: " category_choice
+            
+            # 处理字母快捷操作
+            case "$category_choice" in
+                [mM]) show_main_menu; return ;;
+                [qQ]) echo -e "${GREEN}谢谢使用！${NC}"; exit 0 ;;
+                [cC]) echo -e "${GREEN}已取消编辑联系人${NC}"; sleep 1; show_main_menu; return ;;
+                [sS]) read -p "请输入每页显示数量: " new_size
+                      if [ "$new_size" -gt 0 ] 2>/dev/null; then
+                          current_page_size=$new_size
+                          # 重新计算分页信息
+                          total_pages=$(( (total_categories + current_page_size - 1) / current_page_size ))
+                          current_page=1
+                      else
+                          echo -e "${RED}无效的数量，请输入大于0的数字${NC}"
+                          sleep 1
+                      fi
+                      continue ;;
+                [nN]) if [ $current_page -lt $total_pages ]; then current_page=$((current_page + 1)); else echo -e "${YELLOW}已经是最后一页${NC}"; sleep 1; fi; continue ;;
+                [pP]) if [ $current_page -gt 1 ]; then current_page=$((current_page - 1)); else echo -e "${YELLOW}已经是第一页${NC}"; sleep 1; fi; continue ;;
+            esac
+            
+            # 处理数字选择
+            if [ "$category_choice" -ge 1 ] && [ "$category_choice" -le $total_categories ]; then
+                category=${categories[$((category_choice-1))]}
+                break 2
+            else
+                echo -e "${RED}无效选择，请重新输入${NC}"; sleep 1; continue
+            fi
+        done
     done
-    
-    # 读取用户选择
-    read -p "请输入选择 [1-${#categories[@]}], c.取消: " category_choice
-    
-    # 检查是否取消
-    if [ "$category_choice" = "c" ] || [ "$category_choice" = "C" ]; then
-        echo -e "${GREEN}已取消编辑联系人${NC}"
-        sleep 1
-        show_main_menu
-        return
-    fi
-    
-    # 验证分类选择
-    if [ "$category_choice" -ge 1 ] && [ "$category_choice" -le ${#categories[@]} ]; then
-        category=${categories[$((category_choice-1))]}
-    else
-        echo -e "${RED}无效选择，请重新输入${NC}"
-        sleep 1
-        edit_contact
-        return
-    fi
     
     # 获取联系人列表
     contacts=($(get_yaml_files "$category"))
@@ -572,34 +730,76 @@ function edit_contact() {
         return
     fi
     
-    # 显示联系人菜单
-    echo -e "${YELLOW}请选择联系人:${NC}"
-    
-    # 显示联系人编号和名称
-    for i in "${!contacts[@]}"; do
-        echo -e "${YELLOW}$((i+1)). ${contacts[$i]}${NC}"
+    # 选择联系人
+    while true; do
+        # 分页显示联系人
+        local total_contacts=${#contacts[@]}
+        local total_pages=$(( (total_contacts + current_page_size - 1) / current_page_size ))
+        local current_page=1
+        
+        while true; do
+            clear
+            echo -e "${BLUE}=====================================${NC}"
+            echo -e "${BLUE}            编辑联系人${NC}"
+            echo -e "${BLUE}          分类: $category${NC}"
+            echo -e "${BLUE}=====================================${NC}"
+            
+            # 顶部快捷操作栏
+            echo -e "${YELLOW}【快捷操作】: m.返回主菜单 | q.退出程序 | c.取消 | s.自定义每页显示数量 (当前: $current_page_size)${NC}"
+            echo -e "${BLUE}-------------------------------------${NC}"
+            
+            echo -e "${YELLOW}请选择联系人:${NC}"
+            echo -e "${YELLOW}第 $current_page/$total_pages 页，共 $total_contacts 个联系人${NC}"
+            echo -e "${BLUE}-------------------------------------${NC}"
+            
+            # 计算当前页的起始和结束索引
+            local start_idx=$(( (current_page - 1) * current_page_size ))
+            local end_idx=$(( start_idx + current_page_size - 1 ))
+            if [ $end_idx -ge $total_contacts ]; then
+                end_idx=$((total_contacts - 1))
+            fi
+            
+            # 显示当前页的联系人
+            for ((i=start_idx; i<=end_idx; i++)); do
+                echo -e "${YELLOW}$((i+1)). ${contacts[$i]}${NC}"
+            done
+            
+            # 显示分页导航
+            echo -e "${BLUE}-------------------------------------${NC}"
+            echo -e "${YELLOW}分页导航: p.上一页 | n.下一页${NC}"
+            
+            # 读取用户选择
+            read -p "请输入选择: " contact_choice
+            
+            # 处理字母快捷操作
+            case "$contact_choice" in
+                [mM]) show_main_menu; return ;;
+                [qQ]) echo -e "${GREEN}谢谢使用！${NC}"; exit 0 ;;
+                [cC]) echo -e "${GREEN}已取消编辑联系人${NC}"; sleep 1; show_main_menu; return ;;
+                [sS]) read -p "请输入每页显示数量: " new_size
+                      if [ "$new_size" -gt 0 ] 2>/dev/null; then
+                          current_page_size=$new_size
+                          # 重新计算分页信息
+                          total_pages=$(( (total_contacts + current_page_size - 1) / current_page_size ))
+                          current_page=1
+                      else
+                          echo -e "${RED}无效的数量，请输入大于0的数字${NC}"
+                          sleep 1
+                      fi
+                      continue ;;
+                [nN]) if [ $current_page -lt $total_pages ]; then current_page=$((current_page + 1)); else echo -e "${YELLOW}已经是最后一页${NC}"; sleep 1; fi; continue ;;
+                [pP]) if [ $current_page -gt 1 ]; then current_page=$((current_page - 1)); else echo -e "${YELLOW}已经是第一页${NC}"; sleep 1; fi; continue ;;
+            esac
+            
+            # 处理数字选择
+            if [ "$contact_choice" -ge 1 ] && [ "$contact_choice" -le $total_contacts ]; then
+                contact=${contacts[$((contact_choice-1))]}
+                break 2
+            else
+                echo -e "${RED}无效选择，请重新输入${NC}"; sleep 1; continue
+            fi
+        done
     done
-    
-    # 读取用户选择
-    read -p "请输入选择 [1-${#contacts[@]}], c.取消: " contact_choice
-    
-    # 检查是否取消
-    if [ "$contact_choice" = "c" ] || [ "$contact_choice" = "C" ]; then
-        echo -e "${GREEN}已取消编辑联系人${NC}"
-        sleep 1
-        show_main_menu
-        return
-    fi
-    
-    # 验证联系人选择
-    if [ "$contact_choice" -ge 1 ] && [ "$contact_choice" -le ${#contacts[@]} ]; then
-        contact=${contacts[$((contact_choice-1))]}
-    else
-        echo -e "${RED}无效选择，请重新输入${NC}"
-        sleep 1
-        edit_contact
-        return
-    fi
     
     # 读取当前联系人信息
     yaml_content=$(read_yaml "$category" "$contact")
@@ -691,26 +891,74 @@ function delete_contact() {
         return
     fi
     
-    # 显示分类菜单
-    echo -e "${YELLOW}请选择分类:${NC}"
-    
-    # 显示分类编号和名称
-    for i in "${!categories[@]}"; do
-        echo -e "${YELLOW}$((i+1)). ${categories[$i]}${NC}"
+    # 选择分类
+    while true; do
+        # 分页显示分类
+        local total_categories=${#categories[@]}
+        local total_pages=$(( (total_categories + current_page_size - 1) / current_page_size ))
+        local current_page=1
+        
+        while true; do
+            clear
+            echo -e "${BLUE}=====================================${NC}"
+            echo -e "${BLUE}            删除联系人${NC}"
+            echo -e "${BLUE}=====================================${NC}"
+            
+            # 顶部快捷操作栏
+            echo -e "${YELLOW}【快捷操作】: m.返回主菜单 | q.退出程序 | s.自定义每页显示数量 (当前: $current_page_size)${NC}"
+            echo -e "${BLUE}-------------------------------------${NC}"
+            
+            echo -e "${YELLOW}请选择分类:${NC}"
+            echo -e "${YELLOW}第 $current_page/$total_pages 页，共 $total_categories 个分类${NC}"
+            echo -e "${BLUE}-------------------------------------${NC}"
+            
+            # 计算当前页的起始和结束索引
+            local start_idx=$(( (current_page - 1) * current_page_size ))
+            local end_idx=$(( start_idx + current_page_size - 1 ))
+            if [ $end_idx -ge $total_categories ]; then
+                end_idx=$((total_categories - 1))
+            fi
+            
+            # 显示当前页的分类
+            for ((i=start_idx; i<=end_idx; i++)); do
+                echo -e "${YELLOW}$((i+1)). ${categories[$i]}${NC}"
+            done
+            
+            # 显示分页导航
+            echo -e "${BLUE}-------------------------------------${NC}"
+            echo -e "${YELLOW}分页导航: p.上一页 | n.下一页${NC}"
+            
+            # 读取用户选择
+            read -p "请输入选择: " category_choice
+            
+            # 处理字母快捷操作
+            case "$category_choice" in
+                [mM]) show_main_menu; return ;;
+                [qQ]) echo -e "${GREEN}谢谢使用！${NC}"; exit 0 ;;
+                [sS]) read -p "请输入每页显示数量: " new_size
+                      if [ "$new_size" -gt 0 ] 2>/dev/null; then
+                          current_page_size=$new_size
+                          # 重新计算分页信息
+                          total_pages=$(( (total_categories + current_page_size - 1) / current_page_size ))
+                          current_page=1
+                      else
+                          echo -e "${RED}无效的数量，请输入大于0的数字${NC}"
+                          sleep 1
+                      fi
+                      continue ;;
+                [nN]) if [ $current_page -lt $total_pages ]; then current_page=$((current_page + 1)); else echo -e "${YELLOW}已经是最后一页${NC}"; sleep 1; fi; continue ;;
+                [pP]) if [ $current_page -gt 1 ]; then current_page=$((current_page - 1)); else echo -e "${YELLOW}已经是第一页${NC}"; sleep 1; fi; continue ;;
+            esac
+            
+            # 处理数字选择
+            if [ "$category_choice" -ge 1 ] && [ "$category_choice" -le $total_categories ]; then
+                category=${categories[$((category_choice-1))]}
+                break 2
+            else
+                echo -e "${RED}无效选择，请重新输入${NC}"; sleep 1; continue
+            fi
+        done
     done
-    
-    # 读取用户选择
-    read -p "请输入选择 [1-${#categories[@]}]: " category_choice
-    
-    # 验证分类选择
-    if [ "$category_choice" -ge 1 ] && [ "$category_choice" -le ${#categories[@]} ]; then
-        category=${categories[$((category_choice-1))]}
-    else
-        echo -e "${RED}无效选择，请重新输入${NC}"
-        sleep 1
-        delete_contact
-        return
-    fi
     
     # 获取联系人列表
     contacts=($(get_yaml_files "$category"))
@@ -721,26 +969,74 @@ function delete_contact() {
         return
     fi
     
-    # 显示联系人菜单
-    echo -e "${YELLOW}请选择联系人:${NC}"
-    
-    # 显示联系人编号和名称
-    for i in "${!contacts[@]}"; do
-        echo -e "${YELLOW}$((i+1)). ${contacts[$i]}${NC}"
+    # 选择联系人
+    while true; do
+        # 分页显示联系人
+        local total_contacts=${#contacts[@]}
+        local total_pages=$(( (total_contacts + current_page_size - 1) / current_page_size ))
+        local current_page=1
+        
+        while true; do
+            clear
+            echo -e "${BLUE}=====================================${NC}"
+            echo -e "${BLUE}            删除联系人${NC}"
+            echo -e "${BLUE}          分类: $category${NC}"
+            echo -e "${BLUE}=====================================${NC}"
+            
+            # 顶部快捷操作栏
+            echo -e "${YELLOW}【快捷操作】: m.返回主菜单 | q.退出程序 | s.自定义每页显示数量 (当前: $current_page_size)${NC}"
+            echo -e "${BLUE}-------------------------------------${NC}"
+            
+            echo -e "${YELLOW}请选择联系人:${NC}"
+            echo -e "${YELLOW}第 $current_page/$total_pages 页，共 $total_contacts 个联系人${NC}"
+            echo -e "${BLUE}-------------------------------------${NC}"
+            
+            # 计算当前页的起始和结束索引
+            local start_idx=$(( (current_page - 1) * current_page_size ))
+            local end_idx=$(( start_idx + current_page_size - 1 ))
+            if [ $end_idx -ge $total_contacts ]; then
+                end_idx=$((total_contacts - 1))
+            fi
+            
+            # 显示当前页的联系人
+            for ((i=start_idx; i<=end_idx; i++)); do
+                echo -e "${YELLOW}$((i+1)). ${contacts[$i]}${NC}"
+            done
+            
+            # 显示分页导航
+            echo -e "${BLUE}-------------------------------------${NC}"
+            echo -e "${YELLOW}分页导航: p.上一页 | n.下一页${NC}"
+            
+            # 读取用户选择
+            read -p "请输入选择: " contact_choice
+            
+            # 处理字母快捷操作
+            case "$contact_choice" in
+                [mM]) show_main_menu; return ;;
+                [qQ]) echo -e "${GREEN}谢谢使用！${NC}"; exit 0 ;;
+                [sS]) read -p "请输入每页显示数量: " new_size
+                      if [ "$new_size" -gt 0 ] 2>/dev/null; then
+                          current_page_size=$new_size
+                          total_pages=$(( (total_contacts + current_page_size - 1) / current_page_size ))
+                          current_page=1
+                      else
+                          echo -e "${RED}无效的数量，请输入大于0的数字${NC}"
+                          sleep 1
+                      fi
+                      continue ;;
+                [nN]) if [ $current_page -lt $total_pages ]; then current_page=$((current_page + 1)); else echo -e "${YELLOW}已经是最后一页${NC}"; sleep 1; fi; continue ;;
+                [pP]) if [ $current_page -gt 1 ]; then current_page=$((current_page - 1)); else echo -e "${YELLOW}已经是第一页${NC}"; sleep 1; fi; continue ;;
+            esac
+            
+            # 处理数字选择
+            if [ "$contact_choice" -ge 1 ] && [ "$contact_choice" -le $total_contacts ]; then
+                contact=${contacts[$((contact_choice-1))]}
+                break 2
+            else
+                echo -e "${RED}无效选择，请重新输入${NC}"; sleep 1; continue
+            fi
+        done
     done
-    
-    # 读取用户选择
-    read -p "请输入选择 [1-${#contacts[@]}]: " contact_choice
-    
-    # 验证联系人选择
-    if [ "$contact_choice" -ge 1 ] && [ "$contact_choice" -le ${#contacts[@]} ]; then
-        contact=${contacts[$((contact_choice-1))]}
-    else
-        echo -e "${RED}无效选择，请重新输入${NC}"
-        sleep 1
-        delete_contact
-        return
-    fi
     
     # 确认删除
     read -p "确定要删除联系人 '$contact' 吗？(y/n): " confirm

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "npm run gulp build",
+    "build:all": "npm run gulp buildall",
     "build:web": "npm run gulp buildWeb",
     "serve:web": "node src/serve.js",
     "dev:web": "npm run build:web && npm run serve:web",

@@ -1,0 +1,18 @@
+
+# 获取所有联系人（包含分类信息）
+function get_all_contacts() {
+    local -a all_contacts=()
+    
+    # 遍历所有分类
+    local categories=($(get_categories))
+    for category in "${categories[@]}"; do
+        # 获取该分类下的所有联系人
+        local contacts=($(get_yaml_files "$category"))
+        for contact in "${contacts[@]}"; do
+            # 保存格式为 "分类:联系人"，方便后续处理
+            all_contacts+=("$category:$contact")
+        done
+    done
+    
+    echo "${all_contacts[@]}"
+}

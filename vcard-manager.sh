@@ -239,15 +239,19 @@ function generate_yaml() {
     local url="$3"
     local work_email="$4"
     
+    # 过滤掉终端控制序列
+    local filtered_cell_phone=$(echo "$cell_phone" | sed -E 's/\x1B\[[0-9;]*[a-zA-Z]//g')
+    local filtered_work_email=$(echo "$work_email" | sed -E 's/\x1B\[[0-9;]*[a-zA-Z]//g')
+    
     cat <<EOF
 basic:
   organization: $organization
   cellPhone:
-$(echo "$cell_phone" | awk '{print "    - " $0}')
+$(echo "$filtered_cell_phone" | awk '{print "    - " $0}')
 $(if [ -n "$url" ]; then echo "  url: $url"; fi)
-$(if [ -n "$work_email" ]; then 
+$(if [ -n "$filtered_work_email" ]; then 
     echo "  workEmail:";
-    echo "$work_email" | awk '{print "    - " $0}';
+    echo "$filtered_work_email" | awk '{print "    - " $0}';
 fi)
 EOF
 }

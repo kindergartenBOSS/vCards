@@ -92,6 +92,128 @@ function get_yaml_field() {
     fi
 }
 
+# 编辑数组字段函数
+function edit_array_field() {
+    local field_name="$1"
+    local current_values="$2"  # 换行分隔的字符串
+    local -a values_array=()
+    
+    # 检查输入参数
+    if [ -z "$current_values" ]; then
+        values_array=()
+    else
+        # 将换行分隔的字符串转换为数组
+        while IFS= read -r line; do
+            if [ -n "$line" ]; then  # 只添加非空行
+                values_array+=("$line")
+            fi
+        done <<< "$current_values"
+    fi
+    
+    while true; do
+        clear
+        # 将所有状态输出重定向到标准错误，这样它们会显示在终端上
+        echo -e "${BLUE}=====================================${NC}" >&2
+        echo -e "${BLUE}        编辑 $field_name${NC}" >&2
+        echo -e "${BLUE}=====================================${NC}" >&2
+        
+        # 显示当前值
+        echo -e "${YELLOW}当前 $field_name:${NC}" >&2
+        if [ ${#values_array[@]} -eq 0 ]; then
+            echo -e "${RED}无${NC}" >&2
+        else
+            for ((i=0; i<${#values_array[@]}; i++)); do
+                echo -e "${YELLOW}$((i+1)). ${values_array[$i]}${NC}" >&2
+            done
+        fi
+        echo -e "${BLUE}-------------------------------------${NC}" >&2
+        
+        # 显示操作菜单
+        echo -e "${YELLOW}请选择操作:${NC}" >&2
+        echo -e "${YELLOW}1. 添加新${field_name}${NC}" >&2
+        echo -e "${YELLOW}2. 修改现有${field_name}${NC}" >&2
+        echo -e "${YELLOW}3. 删除现有${field_name}${NC}" >&2
+        echo -e "${YELLOW}4. 保存并返回${NC}" >&2
+        echo -e "${YELLOW}5. 取消编辑${NC}" >&2
+        echo -e "${BLUE}-------------------------------------${NC}" >&2
+        
+        # read命令直接输出到终端
+        read -p "请输入选择 [1-5]: " choice
+        
+        case "$choice" in
+            1)  # 添加新值
+                read -p "请输入新${field_name}: " new_value
+                if [ -n "$new_value" ]; then
+                    values_array+=("$new_value")
+                    echo -e "${GREEN}已添加${field_name}: ${new_value}${NC}" >&2
+                    sleep 1
+                fi
+                ;;
+            2)  # 修改现有值
+                if [ ${#values_array[@]} -eq 0 ]; then
+                    echo -e "${RED}没有可修改的${field_name}${NC}" >&2
+                    sleep 1
+                    continue
+                fi
+                read -p "请输入要修改的${field_name}编号: " idx
+                if [ "$idx" -ge 1 ] && [ "$idx" -le ${#values_array[@]} ]; then
+                    local current_value="${values_array[$((idx-1))]}"
+                    read -p "请输入新的${field_name} [${current_value}] (直接回车保持不变): " new_value
+                    if [ -n "$new_value" ]; then
+                        values_array[$((idx-1))]="$new_value"
+                        echo -e "${GREEN}${field_name}已更新为: ${new_value}${NC}" >&2
+                        sleep 1
+                    else
+                        echo -e "${YELLOW}${field_name}保持不变: ${current_value}${NC}" >&2
+                        sleep 1
+                    fi
+                else
+                    echo -e "${RED}无效的编号${NC}" >&2
+                    sleep 1
+                fi
+                ;;
+            3)  # 删除现有值
+                if [ ${#values_array[@]} -eq 0 ]; then
+                    echo -e "${RED}没有可删除的${field_name}${NC}" >&2
+                    sleep 1
+                    continue
+                fi
+                read -p "请输入要删除的${field_name}编号: " idx
+                if [ "$idx" -ge 1 ] && [ "$idx" -le ${#values_array[@]} ]; then
+                    local deleted_value="${values_array[$((idx-1))]}"
+                    unset values_array[$((idx-1))]
+                    # 重新索引数组
+                    values_array=("${values_array[@]}")
+                    echo -e "${GREEN}已删除${field_name}: ${deleted_value}${NC}" >&2
+                    sleep 1
+                else
+                    echo -e "${RED}无效的编号${NC}" >&2
+                    sleep 1
+                fi
+                ;;
+            4)  # 保存并返回
+                # 将数组转换为换行分隔的字符串
+                local result=""
+                for value in "${values_array[@]}"; do
+                    result+="$value"$'\n'
+                done
+                # 去除末尾换行
+                result=${result%$'\n'}
+                # 只有最终结果使用标准输出，被捕获到变量中
+                echo "$result"
+                return 0
+                ;;
+            5)  # 取消编辑
+                return 1
+                ;;
+            *)
+                echo -e "${RED}无效选择，请重新输入${NC}" >&2
+                sleep 1
+                ;;
+        esac
+    done
+}
+
 # 生成 YAML 内容
 function generate_yaml() {
     local organization="$1"
@@ -103,11 +225,11 @@ function generate_yaml() {
 basic:
   organization: $organization
   cellPhone:
-$(echo "$cell_phone" | awk '{for(i=1;i<=NF;i++) print "    - "$i}')
+$(echo "$cell_phone" | awk '{print "    - " $0}')
 $(if [ -n "$url" ]; then echo "  url: $url"; fi)
 $(if [ -n "$work_email" ]; then 
     echo "  workEmail:";
-    echo "$work_email" | awk '{for(i=1;i<=NF;i++) print "    - "$i}';
+    echo "$work_email" | awk '{print "    - " $0}';
 fi)
 EOF
 }
@@ -991,11 +1113,13 @@ function edit_contact() {
     # 读取当前联系人信息
     yaml_content=$(read_yaml "$category" "$contact")
     
-    # 解析当前字段值
+    # 解析当前字段值 - 保留原始换行格式
     current_organization=$(get_yaml_field "$yaml_content" "organization")
-    current_cell_phone=$(get_yaml_field "$yaml_content" "cellPhone" | tr '\n' ' ')
+    # 保留换行格式的正确方式
+    current_cell_phone="$(get_yaml_field "$yaml_content" "cellPhone")"
     current_url=$(get_yaml_field "$yaml_content" "url")
-    current_work_email=$(get_yaml_field "$yaml_content" "workEmail" | tr '\n' ' ')
+    # 保留换行格式的正确方式
+    current_work_email="$(get_yaml_field "$yaml_content" "workEmail")"
     
     # 输入新的联系人信息，支持默认值
     read -p "请输入组织名称 [$current_organization] (c.取消): " organization
@@ -1007,15 +1131,15 @@ function edit_contact() {
     fi
     organization=${organization:-$current_organization}
     
-    read -p "请输入电话号码 [$current_cell_phone] (c.取消): " cell_phone
-    if [ "$cell_phone" = "c" ] || [ "$cell_phone" = "C" ]; then
-        echo -e "${GREEN}已取消编辑联系人${NC}"
-        sleep 1
-        show_main_menu
-        return
+    # 编辑电话号码（数组字段）
+    echo -e "${BLUE}-------------------------------------${NC}"
+    echo -e "${YELLOW}编辑电话号码${NC}"
+    edited_phone=$(edit_array_field "电话号码" "$current_cell_phone")
+    if [ $? -eq 0 ]; then
+        current_cell_phone="$edited_phone"
     fi
-    cell_phone=${cell_phone:-$current_cell_phone}
     
+    # 编辑网址（非数组字段）
     read -p "请输入网址 [$current_url] (c.取消): " url
     if [ "$url" = "c" ] || [ "$url" = "C" ]; then
         echo -e "${GREEN}已取消编辑联系人${NC}"
@@ -1025,28 +1149,31 @@ function edit_contact() {
     fi
     url=${url:-$current_url}
     
-    read -p "请输入邮箱 [$current_work_email] (c.取消): " work_email
-    if [ "$work_email" = "c" ] || [ "$work_email" = "C" ]; then
-        echo -e "${GREEN}已取消编辑联系人${NC}"
-        sleep 1
-        show_main_menu
-        return
+    # 编辑邮箱（数组字段）
+    echo -e "${BLUE}-------------------------------------${NC}"
+    echo -e "${YELLOW}编辑邮箱${NC}"
+    edited_email=$(edit_array_field "邮箱" "$current_work_email")
+    if [ $? -eq 0 ]; then
+        current_work_email="$edited_email"
     fi
-    work_email=${work_email:-$current_work_email}
     
     # 确认保存
+    # 转换电话号码和邮箱格式为逗号分隔，便于显示
+    local display_phone=$(echo "$current_cell_phone" | tr '\n' ', ' | sed 's/,$//')
+    local display_email=$(echo "$current_work_email" | tr '\n' ', ' | sed 's/,$//')
+    
     echo -e "${BLUE}-------------------------------------${NC}"
     echo -e "${YELLOW}确认保存联系人修改吗？${NC}"
     echo -e "${YELLOW}组织名称:${NC} $organization"
-    echo -e "${YELLOW}电话号码:${NC} ${cell_phone:-无}"
+    echo -e "${YELLOW}电话号码:${NC} ${display_phone:-无}"
     echo -e "${YELLOW}网址:${NC} ${url:-无}"
-    echo -e "${YELLOW}邮箱:${NC} ${work_email:-无}"
+    echo -e "${YELLOW}邮箱:${NC} ${display_email:-无}"
     echo -e "${BLUE}-------------------------------------${NC}"
     read -p "请输入选择 (y.确认保存 | c.取消): " confirm
     
     if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
         # 生成 YAML 内容
-        yaml_content=$(generate_yaml "$organization" "$cell_phone" "$url" "$work_email")
+        yaml_content=$(generate_yaml "$organization" "$current_cell_phone" "$url" "$current_work_email")
         
         # 保存文件
         save_yaml "$category" "$contact" "$yaml_content"

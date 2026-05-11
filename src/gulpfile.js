@@ -28,7 +28,7 @@ const generator_ext = () => {
 }
 
 const archive = () => {
-  return gulp.src(['temp/**', '!temp/汇总/**'])
+  return gulp.src('temp/**')
     .pipe(zip('archive.zip'))
     .pipe(gulp.dest('./public'))
 }

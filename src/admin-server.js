@@ -183,11 +183,6 @@ async function handleApiRequest(req, res, reqPath) {
       const iconPath = reqPath.replace('/api/icon/', '')
       const fullPath = path.join(DATA_DIR, iconPath)
       
-      console.log(`[DEBUG] Icon request: ${reqPath}`)
-      console.log(`[DEBUG] Icon path: ${iconPath}`)
-      console.log(`[DEBUG] Full path: ${fullPath}`)
-      console.log(`[DEBUG] Exists: ${existsSync(fullPath)}`)
-      
       if (!existsSync(fullPath)) {
         res.writeHead(404)
         res.end(JSON.stringify({ message: 'Icon not found' }))
@@ -323,7 +318,6 @@ function buildAdminFiles() {
     }
   })
   
-  console.log('✅ 管理后台文件已构建')
 }
 
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -331,23 +325,16 @@ import { readFileSync, writeFileSync } from 'node:fs'
 buildAdminFiles()
 
 server.listen(PORT, () => {
-  console.log(`🚀 vCards 管理后台运行在: http://localhost:${PORT}`)
-  console.log(`📁 数据目录: ${DATA_DIR}`)
-  console.log('按 Ctrl+C 停止服务器')
 })
 
 process.on('SIGINT', () => {
-  console.log('\n正在关闭服务器...')
   server.close(() => {
-    console.log('服务器已关闭')
     process.exit(0)
   })
 })
 
 process.on('SIGTERM', () => {
-  console.log('\n正在关闭服务器...')
   server.close(() => {
-    console.log('服务器已关闭')
     process.exit(0)
   })
 })

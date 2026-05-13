@@ -260,9 +260,24 @@ async function parseFormData(req) {
       icon: null
     }
 
+    const phoneObjects = {}
+
     busboy.on('field', (name, value) => {
       if (name.startsWith('phones[')) {
-        result.phones.push(value)
+        const match = name.match(/phones\[(\d+)\](?:\[(\w+)\])?/)
+        if (match) {
+          const index = parseInt(match[1])
+          const subField = match[2]
+
+          if (subField) {
+            if (!phoneObjects[index]) {
+              phoneObjects[index] = {}
+            }
+            phoneObjects[index][subField] = value
+          } else {
+            result.phones[index] = value
+          }
+        }
       } else if (name === 'organization') {
         result.organization = value
       } else if (name === 'category') {
@@ -270,6 +285,18 @@ async function parseFormData(req) {
       } else if (name === 'url') {
         result.url = value || null
       }
+    })
+
+    busboy.on('finish', () => {
+      for (const index in phoneObjects) {
+        const obj = phoneObjects[index]
+        if (obj.number) {
+          result.phones[parseInt(index)] = obj
+        }
+      }
+      
+      result.phones = result.phones.filter(p => p)
+      resolve(result)
     })
 
     busboy.on('file', (name, file, info) => {

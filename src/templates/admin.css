@@ -262,10 +262,16 @@ body {
 .phone-item {
     display: flex;
     gap: 8px;
+    align-items: center;
 }
 
 .phone-input {
+    flex: 2;
+}
+
+.phone-label-input {
     flex: 1;
+    max-width: 150px;
 }
 
 .remove-phone-btn {

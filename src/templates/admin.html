@@ -43,6 +43,8 @@
                 <div class="modal-body">
                     <form id="edit-form">
                         <input type="hidden" id="form-id">
+                        <input type="hidden" id="form-original-category">
+                        <input type="hidden" id="form-original-filename">
                         <div class="form-group">
                             <label>分类</label>
                             <select id="form-category" required>
@@ -58,6 +60,7 @@
                             <div id="phone-list">
                                 <div class="phone-item">
                                     <input type="text" class="phone-input" placeholder="电话号码">
+                                    <input type="text" class="phone-label-input" placeholder="标签（可选）">
                                     <button type="button" class="remove-phone-btn">×</button>
                                 </div>
                             </div>

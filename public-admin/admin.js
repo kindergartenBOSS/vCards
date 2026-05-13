@@ -128,6 +128,7 @@ function openAddModal() {
     document.getElementById('phone-list').innerHTML = `
         <div class="phone-item">
             <input type="text" class="phone-input" placeholder="电话号码">
+            <input type="text" class="phone-label-input" placeholder="标签（可选）">
             <button type="button" class="remove-phone-btn">×</button>
         </div>
     `;
@@ -140,29 +141,37 @@ function editContact(category, filename) {
     
     document.getElementById('modal-title').textContent = '编辑联系人';
     document.getElementById('form-id').value = `${category}/${filename}`;
+    document.getElementById('form-original-category').value = category;
+    document.getElementById('form-original-filename').value = filename;
     document.getElementById('form-category').value = category;
     document.getElementById('form-organization').value = contact.organization;
     document.getElementById('form-url').value = contact.url || '';
     
     const phoneList = document.getElementById('phone-list');
-    phoneList.innerHTML = contact.phones.map((phone, index) => `
-        <div class="phone-item">
-            <input type="text" class="phone-input" value="${phone}">
-            <button type="button" class="remove-phone-btn" ${index === 0 ? 'style="display:none"' : ''}>×</button>
-        </div>
-    `).join('');
+    phoneList.innerHTML = contact.phones.map((phone, index) => {
+        const phoneNumber = phone.number ? phone.number : phone;
+        const phoneLabel = phone.label || '';
+        return `
+            <div class="phone-item">
+                <input type="text" class="phone-input" value="${phoneNumber}">
+                <input type="text" class="phone-label-input" value="${phoneLabel}" placeholder="标签（可选）">
+                <button type="button" class="remove-phone-btn" ${index === 0 ? 'style="display:none"' : ''}>×</button>
+            </div>
+        `;
+    }).join('');
     
     document.getElementById('modal').style.display = 'flex';
 }
 
 function addPhoneField() {
     const phoneList = document.getElementById('phone-list');
-    phoneList.innerHTML += `
+    phoneList.insertAdjacentHTML('beforeend', `
         <div class="phone-item">
             <input type="text" class="phone-input" placeholder="电话号码">
+            <input type="text" class="phone-label-input" placeholder="标签（可选）">
             <button type="button" class="remove-phone-btn">×</button>
         </div>
-    `;
+    `);
     bindRemovePhoneEvents();
 }
 
@@ -190,10 +199,23 @@ async function saveContact() {
     const url = document.getElementById('form-url').value;
     const iconFile = document.getElementById('form-icon').files[0];
     
-    const phoneInputs = document.querySelectorAll('.phone-input');
-    const phones = Array.from(phoneInputs)
-        .map(input => input.value.trim())
-        .filter(p => p);
+    const phoneItems = document.querySelectorAll('.phone-item');
+    const phones = [];
+    
+    phoneItems.forEach(item => {
+        const phoneInput = item.querySelector('.phone-input');
+        const labelInput = item.querySelector('.phone-label-input');
+        const phoneNumber = phoneInput.value.trim();
+        const phoneLabel = labelInput.value.trim();
+        
+        if (phoneNumber) {
+            if (phoneLabel) {
+                phones.push({ number: phoneNumber, label: phoneLabel });
+            } else {
+                phones.push(phoneNumber);
+            }
+        }
+    });
     
     if (phones.length === 0) {
         alert('请至少添加一个电话号码');
@@ -207,15 +229,30 @@ async function saveContact() {
         formData.append('organization', organization);
         formData.append('category', category);
         formData.append('url', url);
+        
         phones.forEach((phone, index) => {
-            formData.append(`phones[${index}]`, phone);
+            if (typeof phone === 'object') {
+                formData.append(`phones[${index}][number]`, phone.number);
+                formData.append(`phones[${index}][label]`, phone.label);
+            } else {
+                formData.append(`phones[${index}]`, phone);
+            }
         });
         if (iconFile) {
             formData.append('icon', iconFile);
         }
         
         const method = id ? 'PUT' : 'POST';
-        const urlPath = id ? `${API_BASE}/contacts/${id}` : `${API_BASE}/contacts/${category}/${filename}`;
+        
+        const originalCategory = document.getElementById('form-original-category').value;
+        const originalFilename = document.getElementById('form-original-filename').value;
+        
+        let urlPath;
+        if (id) {
+            urlPath = `${API_BASE}/contacts/${originalCategory}/${originalFilename}`;
+        } else {
+            urlPath = `${API_BASE}/contacts/${category}/${filename}`;
+        }
         
         const response = await fetch(urlPath, {
             method: method,

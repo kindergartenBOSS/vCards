@@ -11,7 +11,10 @@
     "gulp": "gulp --gulpfile src/gulpfile.js --cwd ./",
     "test": "npx ava src/test.js",
     "serve:admin": "node src/admin-server.js",
-    "dev:admin": "node src/admin-server.js"
+    "dev:admin": "node src/admin-server.js",
+    "build:incremental": "npm run gulp buildIncremental",
+    "build:force": "npm run gulp build",
+    "build:clean": "npm run gulp cleanBuildCache"
   },
   "repository": "git@github.com:metowolf/vCards.git",
   "author": "metowolf <i@i-meto.com>",

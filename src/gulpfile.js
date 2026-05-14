@@ -1,7 +1,10 @@
 import fs from 'fs'
 import path from 'path'
+import { fileURLToPath } from 'url'
 import { deleteAsync } from 'del'
 import through2 from 'through2'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 import gulp from 'gulp'
 import zip from 'gulp-zip'
@@ -278,6 +281,313 @@ const radicale = gulp.series(
 // 网页版本完整构建流程
 const buildWeb = gulp.series(cleanWeb, generator, webBuild)
 
+// ==================== 增量构建功能 ====================
+import crypto from 'crypto'
+
+const BUILD_HASH_FILE = path.join(__dirname, '.build-hash')
+
+async function computeFileHash(filePath) {
+  const content = await fs.promises.readFile(filePath)
+  return crypto.createHash('sha1').update(content).digest('hex')
+}
+
+async function readBuildHash() {
+  if (fs.existsSync(BUILD_HASH_FILE)) {
+    try {
+      const content = await fs.promises.readFile(BUILD_HASH_FILE, 'utf8')
+      return JSON.parse(content)
+    } catch {
+      return { files: {}, categories: {} }
+    }
+  }
+  return { files: {}, categories: {} }
+}
+
+function saveBuildHash(hashData) {
+  fs.writeFileSync(BUILD_HASH_FILE, JSON.stringify(hashData, null, 2))
+}
+
+async function scanDataDirectory() {
+  const files = {}
+  const categories = {}
+  
+  function scan(dir, category = null) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        categories[entry.name] = []
+        scan(fullPath, entry.name)
+      } else if (entry.isFile()) {
+        const ext = path.extname(entry.name).toLowerCase()
+        if (ext === '.yaml' || ext === '.png') {
+          files[fullPath] = null
+          if (category) {
+            const baseName = path.basename(entry.name, ext)
+            if (!categories[category].includes(baseName)) {
+              categories[category].push(baseName)
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  scan('./data')
+  
+  for (const filePath of Object.keys(files)) {
+    files[filePath] = await computeFileHash(filePath)
+  }
+  
+  return { files, categories }
+}
+
+async function detectChanges() {
+  const lastBuild = await readBuildHash()
+  const current = await scanDataDirectory()
+  
+  const changes = { new: [], modified: [], deleted: [] }
+  const affectedCategories = new Set()
+  
+  const dataDir = path.resolve('./data')
+  for (const [filePath, currentHash] of Object.entries(current.files)) {
+    const relPath = path.relative(dataDir, filePath)
+    const parts = relPath.split(path.sep)
+    const category = parts[0]
+    
+    if (!lastBuild.files[filePath]) {
+      changes.new.push({
+        path: relPath,
+        fullPath: filePath,
+        category,
+        filename: path.basename(filePath)
+      })
+      affectedCategories.add(category)
+    } else if (lastBuild.files[filePath] !== currentHash) {
+      changes.modified.push({
+        path: relPath,
+        fullPath: filePath,
+        category,
+        filename: path.basename(filePath)
+      })
+      affectedCategories.add(category)
+    }
+  }
+  
+  for (const [filePath] of Object.entries(lastBuild.files)) {
+    if (!current.files[filePath]) {
+      const relPath = path.relative(dataDir, filePath)
+      const parts = relPath.split(path.sep)
+      const category = parts[0]
+      
+      changes.deleted.push({
+        path: relPath,
+        fullPath: filePath,
+        category,
+        filename: path.basename(filePath)
+      })
+      affectedCategories.add(category)
+    }
+  }
+  
+  return {
+    changes,
+    affectedCategories: Array.from(affectedCategories),
+    current
+  }
+}
+
+function generateChangelog(changes, timestamp) {
+  const changelog = []
+  changelog.push('# 增量构建变更摘要')
+  changelog.push('')
+  changelog.push('## 基本信息')
+  changelog.push(`- 构建时间: ${new Date(timestamp).toLocaleString('zh-CN')}`)
+  changelog.push('- 变更类型: 增量构建')
+  changelog.push('')
+  
+  const newCount = changes.new.length
+  const modCount = changes.modified.length
+  const delCount = changes.deleted.length
+  
+  changelog.push('## 变更统计')
+  changelog.push('| 类型 | 数量 |')
+  changelog.push('|------|------|')
+  changelog.push(`| 新增 | ${newCount} |`)
+  changelog.push(`| 修改 | ${modCount} |`)
+  changelog.push(`| 删除 | ${delCount} |`)
+  
+  if (newCount > 0) {
+    changelog.push('')
+    changelog.push('## 新增文件')
+    for (const change of changes.new) {
+      changelog.push(`- 📁 ${change.path}`)
+    }
+  }
+  
+  if (modCount > 0) {
+    changelog.push('')
+    changelog.push('## 修改文件')
+    for (const change of changes.modified) {
+      changelog.push(`- 🔄 ${change.path}`)
+    }
+  }
+  
+  if (delCount > 0) {
+    changelog.push('')
+    changelog.push('## 删除文件')
+    for (const change of changes.deleted) {
+      changelog.push(`- 🗑️ ${change.path}`)
+    }
+  }
+  
+  return changelog.join('\n')
+}
+
+function generateChangeRecord(changes, timestamp, affectedCategories) {
+  return JSON.stringify({
+    buildTime: new Date(timestamp).toISOString(),
+    buildType: 'incremental',
+    summary: {
+      new: changes.new.length,
+      modified: changes.modified.length,
+      deleted: changes.deleted.length
+    },
+    changes: [
+      ...changes.new.map(c => ({ ...c, type: 'new' })),
+      ...changes.modified.map(c => ({ ...c, type: 'modified' })),
+      ...changes.deleted.map(c => ({ ...c, type: 'deleted' }))
+    ],
+    affectedCategories
+  }, null, 2)
+}
+
+const buildIncremental = async () => {
+  const { changes, affectedCategories, current } = await detectChanges()
+  const timestamp = Date.now()
+  const timestampStr = new Date(timestamp).toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  
+  if (changes.new.length === 0 && changes.modified.length === 0 && changes.deleted.length === 0) {
+    console.log('✅ 无变更，跳过增量构建')
+    return
+  }
+  
+  console.log(`🔄 检测到变更: 新增${changes.new.length}个, 修改${changes.modified.length}个, 删除${changes.deleted.length}个`)
+  console.log(`📁 受影响分类: ${affectedCategories.join(', ')}`)
+  
+  const tempIncDir = './temp/incremental'
+  if (!fs.existsSync(tempIncDir)) {
+    fs.mkdirSync(tempIncDir, { recursive: true })
+  }
+  
+  const changelog = generateChangelog(changes, timestamp)
+  const changeRecord = generateChangeRecord(changes, timestamp, affectedCategories)
+  
+  fs.writeFileSync(path.join(tempIncDir, 'CHANGELOG.md'), changelog)
+  fs.writeFileSync(path.join(tempIncDir, '变更记录.json'), changeRecord)
+  
+  const newDir = path.join(tempIncDir, '新增')
+  const modDir = path.join(tempIncDir, '修改')
+  const delDir = path.join(tempIncDir, '删除')
+  const summaryDir = path.join(tempIncDir, '汇总')
+  fs.mkdirSync(newDir, { recursive: true })
+  fs.mkdirSync(modDir, { recursive: true })
+  fs.mkdirSync(delDir, { recursive: true })
+  fs.mkdirSync(summaryDir, { recursive: true })
+  
+  const categoryVcfMap = {}
+  
+  for (const category of affectedCategories) {
+    categoryVcfMap[category] = []
+    const categoryDir = path.join('./data', category)
+    const yamlFiles = fs.readdirSync(categoryDir).filter(f => f.endsWith('.yaml'))
+    
+    for (const yamlFile of yamlFiles) {
+      const yamlPath = path.join(categoryDir, yamlFile)
+      const baseName = path.basename(yamlFile, '.yaml')
+      
+      const isNew = changes.new.some(c => c.filename === `${baseName}.yaml` || c.filename === `${baseName}.png`)
+      const isModified = changes.modified.some(c => c.filename === `${baseName}.yaml` || c.filename === `${baseName}.png`)
+      const isDeleted = changes.deleted.some(c => c.filename === `${baseName}.yaml` || c.filename === `${baseName}.png`)
+      
+      if (!isNew && !isModified && !isDeleted) {
+        continue
+      }
+      
+      const content = fs.readFileSync(yamlPath, 'utf8')
+      const data = yaml.load(content)
+      
+      if (data && data.basic) {
+        const vcfContent = await new Promise((resolve) => {
+          plugin_vcard({ path: yamlPath, contents: content }, null, (err, result) => {
+            resolve(err ? null : result.contents.toString())
+          })
+        })
+        
+        if (vcfContent) {
+          categoryVcfMap[category].push(vcfContent)
+          
+          let targetDir
+          if (isDeleted) {
+            targetDir = delDir
+          } else if (isNew) {
+            targetDir = newDir
+          } else {
+            targetDir = modDir
+          }
+          
+          const categoryTargetDir = path.join(targetDir, category)
+          if (!fs.existsSync(categoryTargetDir)) {
+            fs.mkdirSync(categoryTargetDir, { recursive: true })
+          }
+          
+          if (isDeleted) {
+            const delMarker = JSON.stringify({
+              deletedAt: new Date(timestamp).toISOString(),
+              originalPath: `${category}/${baseName}.yaml`,
+              category,
+              filename: baseName
+            }, null, 2)
+            fs.writeFileSync(path.join(categoryTargetDir, `${baseName}.vcf.del`), delMarker)
+          } else {
+            fs.writeFileSync(path.join(categoryTargetDir, `${baseName}.vcf`), vcfContent)
+          }
+        }
+      }
+    }
+    
+    if (categoryVcfMap[category].length > 0) {
+      const allVcfContent = categoryVcfMap[category].join('\n')
+      fs.writeFileSync(path.join(summaryDir, `${category}.all.vcf`), allVcfContent)
+    }
+  }
+  
+  const zipName = `archive-incremental-${timestampStr}.zip`
+  return new Promise((resolve, reject) => {
+    gulp.src(`${tempIncDir}/**/*`)
+      .pipe(zip(zipName))
+      .pipe(gulp.dest('./public'))
+      .on('end', () => {
+        console.log(`📦 增量包已生成: ${zipName}`)
+        saveBuildHash({
+          timestamp: new Date(timestamp).toISOString(),
+          files: current.files,
+          categories: current.categories
+        })
+        resolve()
+      })
+      .on('error', reject)
+  })
+}
+
+const cleanBuildCache = (done) => {
+  if (fs.existsSync(BUILD_HASH_FILE)) {
+    fs.unlinkSync(BUILD_HASH_FILE)
+    console.log('🗑️ 构建缓存已清理')
+  }
+  done()
+}
+
 export {
   generator,
   combine,
@@ -286,5 +596,7 @@ export {
   distSummary,
   build,
   radicale,
-  buildWeb
+  buildWeb,
+  buildIncremental,
+  cleanBuildCache
 }

@@ -94,8 +94,13 @@ function renderContacts(filtered = contacts) {
                 </div>
             </div>
             <div class="card-phones">
-                ${contact.phones.slice(0, 3).map(p => `<div class="card-phone">📞 ${p}</div>`).join('')}
-                ${contact.phones.length > 3 ? `<div class="card-phone">... +${contact.phones.length - 3}</div>` : ''}
+                ${contact.phones.map(p => {
+                    if (typeof p === 'object' && p.number) {
+                        return `<div class="card-phone">📞 ${p.number} <span class="phone-label">(${p.label})</span></div>`;
+                    } else {
+                        return `<div class="card-phone">📞 ${p}</div>`;
+                    }
+                }).join('')}
             </div>
             ${contact.url ? `<div class="card-url">🌐 ${contact.url}</div>` : ''}
             <div class="card-actions">

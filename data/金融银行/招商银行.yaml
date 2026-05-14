@@ -7,10 +7,5 @@ basic:
     - 1065795555
     - 021-38784800
     - 021-68674800
-    - number: 4008895555
-      label: 金葵花专线
-  workEmail:
-    - ccsvcad@message.cmbchina.com
-    - ccsvc@message.cmbchina.com
-    - 95555@message.cmbchina.com
+    - 4008895555 # 金葵花专线
   url: https://www.cmbchina.com/

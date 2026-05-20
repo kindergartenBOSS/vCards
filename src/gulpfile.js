@@ -269,7 +269,17 @@ const distRadicaleMacos = (done) => {
   done();
 }
 
-const build = gulp.series(clean, generator, combine, allinone, distSummary, archive)
+const saveBuildHashAfterBuild = async () => {
+  const current = await scanDataDirectory()
+  saveBuildHash({
+    timestamp: new Date().toISOString(),
+    files: current.files,
+    categories: current.categories
+  })
+  console.log('✅ 构建哈希已保存')
+}
+
+const build = gulp.series(clean, generator, combine, allinone, distSummary, archive, saveBuildHashAfterBuild)
 const radicale = gulp.series(
   clean,
   generator_ext,

@@ -18,6 +18,7 @@ function setupEventListeners() {
     document.querySelector('.close').addEventListener('click', closeModal);
     
     document.getElementById('add-phone-btn').addEventListener('click', addPhoneField);
+    document.getElementById('add-email-btn').addEventListener('click', addEmailField);
     
     document.getElementById('modal').addEventListener('click', (e) => {
         if (e.target === document.getElementById('modal')) {
@@ -103,6 +104,15 @@ function renderContacts(filtered = contacts) {
                 }).join('')}
             </div>
             ${contact.url ? `<div class="card-url">🌐 ${contact.url}</div>` : ''}
+            ${contact.emails && contact.emails.length > 0 ? `
+                <div class="card-emails">
+                    ${contact.emails.map(email => {
+                        const emailValue = email.email ? email.email : email;
+                        const emailLabel = email.label ? ` (${email.label})` : '';
+                        return `<div class="card-email">📧 ${emailValue}${emailLabel}</div>`;
+                    }).join('')}
+                </div>
+            ` : ''}
             <div class="card-actions">
                 <button class="btn btn-secondary" onclick="editContact('${contact.category}', '${contact.filename}')">编辑</button>
                 <button class="btn btn-danger" onclick="deleteContact('${contact.category}', '${contact.filename}')">删除</button>
@@ -137,6 +147,13 @@ function openAddModal() {
             <button type="button" class="remove-phone-btn">×</button>
         </div>
     `;
+    document.getElementById('email-list').innerHTML = `
+        <div class="email-item">
+            <input type="email" class="email-input" placeholder="工作邮箱">
+            <input type="text" class="email-label-input" placeholder="标签（可选）">
+            <button type="button" class="remove-email-btn">×</button>
+        </div>
+    `;
     document.getElementById('modal').style.display = 'flex';
 }
 
@@ -165,6 +182,20 @@ function editContact(category, filename) {
         `;
     }).join('');
     
+    const emailList = document.getElementById('email-list');
+    const emails = contact.emails || [];
+    emailList.innerHTML = emails.map((email, index) => {
+        const emailValue = email.email ? email.email : email;
+        const emailLabel = email.label || '';
+        return `
+            <div class="email-item">
+                <input type="email" class="email-input" value="${emailValue}">
+                <input type="text" class="email-label-input" value="${emailLabel}" placeholder="标签（可选）">
+                <button type="button" class="remove-email-btn" ${index === 0 && emails.length <= 1 ? 'style="display:none"' : ''}>×</button>
+            </div>
+        `;
+    }).join('');
+    
     document.getElementById('modal').style.display = 'flex';
 }
 
@@ -184,6 +215,29 @@ function bindRemovePhoneEvents() {
     document.querySelectorAll('.remove-phone-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const items = document.querySelectorAll('.phone-item');
+            if (items.length > 1) {
+                this.parentElement.remove();
+            }
+        });
+    });
+}
+
+function addEmailField() {
+    const emailList = document.getElementById('email-list');
+    emailList.insertAdjacentHTML('beforeend', `
+        <div class="email-item">
+            <input type="email" class="email-input" placeholder="工作邮箱">
+            <input type="text" class="email-label-input" placeholder="标签（可选）">
+            <button type="button" class="remove-email-btn">×</button>
+        </div>
+    `);
+    bindRemoveEmailEvents();
+}
+
+function bindRemoveEmailEvents() {
+    document.querySelectorAll('.remove-email-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const items = document.querySelectorAll('.email-item');
             if (items.length > 1) {
                 this.parentElement.remove();
             }
@@ -227,6 +281,22 @@ async function saveContact() {
         return;
     }
     
+    const emailItems = document.querySelectorAll('.email-item');
+    const emails = [];
+    emailItems.forEach(item => {
+        const emailInput = item.querySelector('.email-input');
+        const labelInput = item.querySelector('.email-label-input');
+        const emailValue = emailInput.value.trim();
+        const emailLabel = labelInput.value.trim();
+        if (emailValue) {
+            if (emailLabel) {
+                emails.push({ email: emailValue, label: emailLabel });
+            } else {
+                emails.push(emailValue);
+            }
+        }
+    });
+    
     const filename = organization.replace(/[\/:*?"<>|]/g, '_');
     
     try {
@@ -243,6 +313,16 @@ async function saveContact() {
                 formData.append(`phones[${index}]`, phone);
             }
         });
+        
+        emails.forEach((email, index) => {
+            if (typeof email === 'object') {
+                formData.append(`emails[${index}][email]`, email.email);
+                formData.append(`emails[${index}][label]`, email.label);
+            } else {
+                formData.append(`emails[${index}]`, email);
+            }
+        });
+        
         if (iconFile) {
             formData.append('icon', iconFile);
         }

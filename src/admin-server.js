@@ -69,6 +69,8 @@ async function getContacts() {
 }
 
 async function saveContact(category, filename, data) {
+  console.log('saveContact data:', JSON.stringify(data, null, 2))
+  
   const categoryPath = path.join(DATA_DIR, category)
   
   if (!existsSync(categoryPath)) {
@@ -86,8 +88,10 @@ async function saveContact(category, filename, data) {
     }
   }
   
+  console.log('emails data:', data.emails)
   if (data.emails && data.emails.length > 0) {
     yamlData.basic.workEmail = data.emails
+    console.log('Added workEmail to yamlData')
   }
   
   await writeFile(yamlPath, yaml.dump(yamlData))
@@ -257,6 +261,7 @@ async function parseFormData(req) {
       category: '',
       url: '',
       phones: [],
+      emails: [],
       icon: null
     }
 
@@ -278,6 +283,21 @@ async function parseFormData(req) {
             result.phones[index] = value
           }
         }
+      } else if (name.startsWith('emails[')) {
+        const match = name.match(/emails\[(\d+)\](?:\[(\w+)\])?/)
+        if (match) {
+          const index = parseInt(match[1])
+          const subField = match[2]
+          
+          if (subField) {
+            if (!result.emails[index]) {
+              result.emails[index] = {}
+            }
+            result.emails[index][subField] = value
+          } else {
+            result.emails[index] = value
+          }
+        }
       } else if (name === 'organization') {
         result.organization = value
       } else if (name === 'category') {
@@ -296,6 +316,7 @@ async function parseFormData(req) {
       }
       
       result.phones = result.phones.filter(p => p)
+      result.emails = result.emails.filter(e => e)
       resolve(result)
     })
 

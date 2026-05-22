@@ -486,9 +486,10 @@ const buildIncremental = async () => {
   console.log(`📁 受影响分类: ${affectedCategories.join(', ')}`)
   
   const tempIncDir = './temp/incremental'
-  if (!fs.existsSync(tempIncDir)) {
-    fs.mkdirSync(tempIncDir, { recursive: true })
+  if (fs.existsSync(tempIncDir)) {
+    fs.rmSync(tempIncDir, { recursive: true, force: true })
   }
+  fs.mkdirSync(tempIncDir, { recursive: true })
   
   const changelog = generateChangelog(changes, timestamp)
   const changeRecord = generateChangeRecord(changes, timestamp, affectedCategories)
@@ -520,10 +521,6 @@ const buildIncremental = async () => {
       const isModified = changes.modified.some(c => c.filename === `${baseName}.yaml` || c.filename === `${baseName}.png`)
       const isDeleted = changes.deleted.some(c => c.filename === `${baseName}.yaml` || c.filename === `${baseName}.png`)
       
-      if (!isNew && !isModified && !isDeleted) {
-        continue
-      }
-      
       const content = fs.readFileSync(yamlPath, 'utf8')
       const data = yaml.load(content)
       
@@ -537,30 +534,32 @@ const buildIncremental = async () => {
         if (vcfContent) {
           categoryVcfMap[category].push(vcfContent)
           
-          let targetDir
-          if (isDeleted) {
-            targetDir = delDir
-          } else if (isNew) {
-            targetDir = newDir
-          } else {
-            targetDir = modDir
-          }
-          
-          const categoryTargetDir = path.join(targetDir, category)
-          if (!fs.existsSync(categoryTargetDir)) {
-            fs.mkdirSync(categoryTargetDir, { recursive: true })
-          }
-          
-          if (isDeleted) {
-            const delMarker = JSON.stringify({
-              deletedAt: new Date(timestamp).toISOString(),
-              originalPath: `${category}/${baseName}.yaml`,
-              category,
-              filename: baseName
-            }, null, 2)
-            fs.writeFileSync(path.join(categoryTargetDir, `${baseName}.vcf.del`), delMarker)
-          } else {
-            fs.writeFileSync(path.join(categoryTargetDir, `${baseName}.vcf`), vcfContent)
+          if (isNew || isModified || isDeleted) {
+            let targetDir
+            if (isDeleted) {
+              targetDir = delDir
+            } else if (isNew) {
+              targetDir = newDir
+            } else {
+              targetDir = modDir
+            }
+            
+            const categoryTargetDir = path.join(targetDir, category)
+            if (!fs.existsSync(categoryTargetDir)) {
+              fs.mkdirSync(categoryTargetDir, { recursive: true })
+            }
+            
+            if (isDeleted) {
+              const delMarker = JSON.stringify({
+                deletedAt: new Date(timestamp).toISOString(),
+                originalPath: `${category}/${baseName}.yaml`,
+                category,
+                filename: baseName
+              }, null, 2)
+              fs.writeFileSync(path.join(categoryTargetDir, `${baseName}.vcf.del`), delMarker)
+            } else {
+              fs.writeFileSync(path.join(categoryTargetDir, `${baseName}.vcf`), vcfContent)
+            }
           }
         }
       }

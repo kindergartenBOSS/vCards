@@ -1,16 +1,22 @@
 basic:
   organization: 中国联通
   cellPhone:
-    - 10010
-    - 10011
-    - 10016
-    - 10018
-    - number: 101906
+    - '10010'
+    - '10011'
+    - '10016'
+    - '10018'
+    - number: '101906'
       label: 沃助理
-    - number: 10655152
+    - number: '10655152'
       label: 出境服务
-    - 10655511
-    - 96169
-    - number: 10165
+    - '10655511'
+    - '96169'
+    - number: '10165'
       label: 沃留言
+    - number: '1111'
+      label: tt
+    - number: '2222'
+      label: qq
+    - number: '333'
+      label: '33'
   url: https://www.10010.com/

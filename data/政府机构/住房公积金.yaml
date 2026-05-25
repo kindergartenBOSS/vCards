@@ -1,5 +1,7 @@
 basic:
   organization: 住房公积金
   cellPhone:
-    - 12329
+    - '12329'
+    - number: '10690708007130'
+      label: 青岛公积金中心
   url: https://www.mohurd.gov.cn/

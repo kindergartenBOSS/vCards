@@ -162,6 +162,7 @@ function editContact(category, filename) {
     if (!contact) return;
     
     document.getElementById('modal-title').textContent = '编辑联系人';
+    document.getElementById('edit-form').reset();
     document.getElementById('form-id').value = `${category}/${filename}`;
     document.getElementById('form-original-category').value = category;
     document.getElementById('form-original-filename').value = filename;

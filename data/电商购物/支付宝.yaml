@@ -1,5 +1,6 @@
 basic:
   organization: 支付宝
   cellPhone:
-    - 95188
+    - '95188'
+    - '10686964763051000001'
   url: https://www.alipay.com/

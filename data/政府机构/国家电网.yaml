@@ -1,6 +1,8 @@
 basic:
   organization: 国家电网
   cellPhone:
-    - 95598
-    - 955981112
+    - '95598'
+    - '955981112'
+    - number: '106388895598'
+      label: 山东电力
   url: http://www.sgcc.com.cn/

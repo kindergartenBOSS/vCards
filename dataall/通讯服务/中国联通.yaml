@@ -1,0 +1,19 @@
+basic:
+  organization: 中国联通
+  cellPhone:
+    - '10010'
+    - '10011'
+    - '10016'
+    - '10018'
+    - number: '101906'
+      label: 沃助理
+    - number: '10655152'
+      label: 出境服务
+    - '10655511'
+    - '96169'
+    - number: '10165'
+      label: 沃留言
+    - number: '861065596130'
+      label: 青岛联通
+    - '1001206'
+  url: https://www.10010.com/

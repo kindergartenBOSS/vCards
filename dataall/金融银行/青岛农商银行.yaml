@@ -1,0 +1,8 @@
+basic:
+  organization: 青岛农商银行
+  cellPhone:
+    - '96668'
+    - number: '4001196668'
+      label: 信用卡中心
+    - '10691009196668'
+  url: https://www.qrcb.com.cn/

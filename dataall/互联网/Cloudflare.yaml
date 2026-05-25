@@ -1,0 +1,10 @@
+basic:
+  organization: Cloudflare
+  cellPhone:
+    - +16503198930
+  workEmail:
+    - email: noreply@notify.cloudflare.com
+      label: 通知
+    - email: no-reply@notify.cloudflare.com
+      label: 通知
+  url: https://www.cloudflare.com/
